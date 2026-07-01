@@ -17,6 +17,8 @@ class FinanceRepository(private val dao: FamilyFinanceDao) {
     val allInsurance: Flow<List<InsuranceEntity>> = dao.getAllInsurance()
     val allStocks: Flow<List<StockEntity>> = dao.getAllStocks()
     val allCreditCards: Flow<List<CreditCardEntity>> = dao.getAllCreditCards()
+    val allRecurringExpenses: Flow<List<RecurringExpenseEntity>> = dao.getAllRecurringExpenses()
+    val allGovtSchemes: Flow<List<GovtSchemeEntity>> = dao.getAllGovtSchemes()
 
     suspend fun insertTransaction(
         amount: Double,

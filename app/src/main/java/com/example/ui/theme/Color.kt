@@ -22,10 +22,10 @@ fun updateThemePreference(context: Context, newTheme: String) {
 
 // Premium Athletic Black & Royal Blue Aesthetic
 val SlateDark: Color
-    get() = Color(0xFF000000) // Pure solid OLED black background always
+    get() = if (isDarkThemeGlobal) Color(0xFF000000) else Color(0xFFF1F5F9)
 
 val SlateCard: Color
-    get() = Color(0xFF000000) // All panels are premium black as requested
+    get() = if (isDarkThemeGlobal) Color(0xFF000000) else Color(0xFFFFFFFF)
 
 val TealPrimary = Color(0xFF3B66F6)    // Royal Blue primary action / buttons
 val MintAccent = Color(0xFF10B981)     // Original crisp tech green for positive balances/charts
@@ -34,11 +34,11 @@ val AlertCoral = Color(0xFFEF4444)     // Clean alert coral red
 val ElectricBlue = Color(0xFF3B66F6)   // Royal Blue accent
 
 val OffWhite: Color
-    get() = Color(0xFFFFFFFF) // High-contrast crisp white text
+    get() = if (isDarkThemeGlobal) Color(0xFFFFFFFF) else Color(0xFF0F172A)
 
 val SoftGray: Color
-    get() = Color(0xFF9E9E9E) // Muted slate gray for secondary labels
+    get() = if (isDarkThemeGlobal) Color(0xFF9E9E9E) else Color(0xFF64748B)
 
 val BorderSlate: Color
-    get() = Color(0xFF1C1C24) // Subtle onyx border around panels
+    get() = if (isDarkThemeGlobal) Color(0xFF1C1C24) else Color(0xFFE2E8F0)
 

@@ -84,6 +84,8 @@ import androidx.compose.ui.window.Dialog
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 
 @Composable
 fun UserProfileAvatar(
@@ -156,6 +158,32 @@ val rupeeFormat = DecimalFormat("₹#,##,##0.00")
 
 fun formatRupee(value: Double): String {
     return rupeeFormat.format(value)
+}
+
+@Composable
+fun Modifier.fadeInSlideIn(
+    delayMillis: Int = 0,
+    durationMillis: Int = 450
+): Modifier {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (delayMillis > 0) {
+            kotlinx.coroutines.delay(delayMillis.toLong())
+        }
+        visible = true
+    }
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(durationMillis = durationMillis, easing = FastOutSlowInEasing),
+        label = "alpha"
+    )
+    val offsetY by animateFloatAsState(
+        targetValue = if (visible) 0f else 20f,
+        animationSpec = tween(durationMillis = durationMillis, easing = FastOutSlowInEasing),
+        label = "offsetY"
+    )
+    return this
+        .graphicsLayer(alpha = alpha, translationY = offsetY)
 }
 
 fun getYearFromTimestamp(timestamp: Long): Int {
@@ -409,6 +437,7 @@ fun FinanceApp(viewModel: FinanceViewModel) {
     var showQuickAddDialog by remember { mutableStateOf(false) }
     var showInfoTipsDialog by remember { mutableStateOf(false) }
     var showNotificationsDialog by remember { mutableStateOf(false) }
+    var showProfileEditDialog by remember { mutableStateOf(false) }
 
     val transactions by viewModel.transactions.collectAsStateWithLifecycle()
 
@@ -455,7 +484,12 @@ fun FinanceApp(viewModel: FinanceViewModel) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clickable { showProfileEditDialog = true }
+                            .testTag("profile_edit_trigger_row")
+                    ) {
                         UserProfileAvatar(
                             photoUri = currentUser?.photoUri,
                             displayName = username,
@@ -623,7 +657,8 @@ fun FinanceApp(viewModel: FinanceViewModel) {
                         viewModel = viewModel,
                         yearFilter = selectedYear,
                         monthFilter = selectedMonth,
-                        onNavigateToAdd = { activeTab = 1 }
+                        onNavigateToAdd = { activeTab = 1 },
+                        onViewAllTips = { showInfoTipsDialog = true }
                     )
                     1 -> AddTransactionScreen(
                         viewModel = viewModel,
@@ -719,6 +754,21 @@ fun FinanceApp(viewModel: FinanceViewModel) {
     if (showNotificationsDialog) {
         SyncNotificationsDialog(
             onDismiss = { showNotificationsDialog = false },
+            viewModel = viewModel
+        )
+    }
+
+    if (showProfileEditDialog) {
+        val currentUser = authenticatedUser
+        val usernameVal = if (currentUser?.displayName?.isNotBlank() == true) {
+            currentUser.displayName
+        } else {
+            currentUser?.email?.substringBefore("@")?.uppercase(Locale.ROOT) ?: "BALA"
+        }
+        ProfileEditDialog(
+            currentName = usernameVal,
+            currentPhotoUri = currentUser?.photoUri,
+            onDismiss = { showProfileEditDialog = false },
             viewModel = viewModel
         )
     }
@@ -1537,6 +1587,185 @@ fun EditTransactionDialog(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+fun ProfileEditDialog(
+    currentName: String,
+    currentPhotoUri: String?,
+    onDismiss: () -> Unit,
+    viewModel: FinanceViewModel
+) {
+    var nameInput by remember { mutableStateOf(currentName) }
+    var photoUriInput by remember { mutableStateOf(currentPhotoUri ?: "") }
+    
+    val presets = listOf("💼", "💰", "👑", "🚀", "🦄", "🎯", "🦁", "🐼", "🦊", "🐯", "🥑", "🍕")
+    
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = SlateCard),
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, BorderSlate, RoundedCornerShape(24.dp))
+                .testTag("profile_edit_dialog")
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("👤", fontSize = 20.sp)
+                        Text(
+                            text = "EDIT PROFILE",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Black,
+                            color = TealPrimary,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = SoftGray, modifier = Modifier.size(18.dp))
+                    }
+                }
+
+                HorizontalDivider(color = BorderSlate, thickness = 0.5.dp)
+
+                // Current Preview
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    UserProfileAvatar(
+                        photoUri = if (photoUriInput.isNotBlank()) photoUriInput else null,
+                        displayName = nameInput.ifBlank { "M" },
+                        size = 72.dp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Avatar Preview", fontSize = 10.sp, color = SoftGray)
+                }
+
+                // Name Input
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("USER NAME", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = SoftGray)
+                    OutlinedTextField(
+                        value = nameInput,
+                        onValueChange = { nameInput = it },
+                        placeholder = { Text("Enter your name", fontSize = 12.sp, color = SoftGray) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = TealPrimary,
+                            unfocusedBorderColor = BorderSlate,
+                            focusedTextColor = OffWhite,
+                            unfocusedTextColor = OffWhite,
+                            focusedContainerColor = SlateDark,
+                            unfocusedContainerColor = SlateDark
+                        ),
+                        modifier = Modifier.fillMaxWidth().height(50.dp).testTag("profile_name_input"),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true
+                    )
+                }
+
+                // Preset Avatars Selector
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("CHOOSE QUICK EMOTICON AVATAR", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = SoftGray)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        presets.forEach { emoji ->
+                            val presetVal = "preset:$emoji"
+                            val isSelected = photoUriInput == presetVal
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isSelected) TealPrimary.copy(alpha = 0.25f) else SlateDark)
+                                    .border(1.2.dp, if (isSelected) TealPrimary else BorderSlate, CircleShape)
+                                    .clickable { photoUriInput = presetVal }
+                                    .testTag("preset_avatar_$emoji"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(emoji, fontSize = 20.sp)
+                            }
+                        }
+                    }
+                }
+
+                // Custom Photo URL Input
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("OR PASTE PROFILE IMAGE URL", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = SoftGray)
+                    OutlinedTextField(
+                        value = if (photoUriInput.startsWith("preset:")) "" else photoUriInput,
+                        onValueChange = { photoUriInput = it },
+                        placeholder = { Text("https://example.com/avatar.png", fontSize = 11.sp, color = SoftGray) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = TealPrimary,
+                            unfocusedBorderColor = BorderSlate,
+                            focusedTextColor = OffWhite,
+                            unfocusedTextColor = OffWhite,
+                            focusedContainerColor = SlateDark,
+                            unfocusedContainerColor = SlateDark
+                        ),
+                        modifier = Modifier.fillMaxWidth().height(48.dp).testTag("profile_photo_url_input"),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Action buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        border = BorderStroke(1.dp, BorderSlate),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = OffWhite),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("CANCEL", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    val isValid = nameInput.isNotBlank()
+                    Button(
+                        onClick = {
+                            if (isValid) {
+                                viewModel.updateProfile(nameInput, if (photoUriInput.isBlank()) null else photoUriInput)
+                                onDismiss()
+                            }
+                        },
+                        enabled = isValid,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TealPrimary,
+                            disabledContainerColor = TealPrimary.copy(alpha = 0.3f)
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1.5f).testTag("profile_save_btn")
+                    ) {
+                        Text("SAVE PROFILE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isValid) Color.White else SoftGray)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 fun SetBudgetDialog(
     category: String,
     currentLimit: Double,
@@ -1590,7 +1819,7 @@ fun SetBudgetDialog(
                 HorizontalDivider(color = BorderSlate, thickness = 0.5.dp)
                 
                 Text(
-                    text = "Configure the monthly budget limit for category '$category'. NAME FN will dynamically warn you when approaching or exceeding this amount.",
+                    text = "Configure the monthly budget limit for category '$category'. FineNest will dynamically warn you when approaching or exceeding this amount.",
                     fontSize = 12.sp,
                     color = SoftGray,
                     lineHeight = 16.sp
@@ -1926,120 +2155,378 @@ fun MonexTrendsChart(
     modifier: Modifier = Modifier
 ) {
     val shortMonths = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun")
-    val barData = listOf(35.0f, 60.4f, 32.2f, 31.0f, 50.3f, 43.4f)
+    
+    val monthlySpends = DoubleArray(6) { 0.0 }
+    transactions.filter { it.type == "Expense" }.forEach { tx ->
+        val cal = Calendar.getInstance().apply { timeInMillis = tx.date }
+        val month = cal.get(Calendar.MONTH)
+        if (month in 0..5) {
+            monthlySpends[month] += tx.amount
+        }
+    }
+    
+    val defaultBaseValues = listOf(35000.0, 48000.0, 32200.0, 31000.0, 50300.0, 43400.0)
+    val chartData = DoubleArray(6) { idx ->
+        val actual = monthlySpends[idx]
+        if (actual > 0.0) actual else defaultBaseValues[idx]
+    }
+    
+    val budgetLimit = 45000.0
+    var selectedPointIndex by remember { mutableStateOf<Int?>(null) }
     
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = SlateCard),
         modifier = modifier
             .fillMaxWidth()
-            .border(1.2.dp, BorderSlate, RoundedCornerShape(16.dp))
+            .border(1.2.dp, BorderSlate, RoundedCornerShape(24.dp))
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(18.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "📈 MONTHLY SPENDS TRENDS",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = SoftGray
-                )
-                Text(
-                    text = "Jun '26 Active",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TealPrimary
-                )
+                Column {
+                    Text(
+                        text = "📈 SPENDING TRENDS vs BUDGET",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = SoftGray,
+                        letterSpacing = 0.5.sp
+                    )
+                    Text(
+                        text = "Interactive Live Sync",
+                        fontSize = 10.sp,
+                        color = TealPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(TealPrimary))
+                        Text("Spend", fontSize = 9.sp, color = OffWhite, fontWeight = FontWeight.Bold)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(AlertCoral))
+                        Text("Budget", fontSize = 9.sp, color = SoftGray, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
             
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(160.dp)
+                    .height(180.dp)
             ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onTap = { offset ->
+                                    val w = size.width.toFloat()
+                                    val stepX = w / (shortMonths.size + 1).toFloat()
+                                    var minDiff = Float.MAX_VALUE
+                                    var closestIdx = 0
+                                    for (i in shortMonths.indices) {
+                                        val x = stepX * (i + 1).toFloat()
+                                        val diff = kotlin.math.abs(offset.x - x)
+                                        if (diff < minDiff) {
+                                            minDiff = diff
+                                            closestIdx = i
+                                        }
+                                    }
+                                    selectedPointIndex = if (selectedPointIndex == closestIdx) null else closestIdx
+                                }
+                            )
+                        }
+                ) {
                     val w = size.width
                     val h = size.height
+                    val paddingBottom = 20f
+                    val paddingTop = 15f
+                    val plotHeight = h - paddingBottom - paddingTop
                     
-                    val lineThickness = 1.dp.toPx()
+                    val maxVal = 65000f
+                    val stepX = w / (shortMonths.size + 1)
+                    
                     val gridCount = 4
-                    val stepY = h / (gridCount + 1)
-                    
+                    val stepY = plotHeight / (gridCount + 1)
                     for (i in 1..gridCount) {
-                        val y = i * stepY
+                        val y = paddingTop + i * stepY
                         drawLine(
-                            color = BorderSlate.copy(alpha = 0.4f),
+                            color = BorderSlate.copy(alpha = 0.3f),
                             start = Offset(0f, y),
                             end = Offset(w, y),
-                            strokeWidth = lineThickness
+                            strokeWidth = 1.dp.toPx()
                         )
                     }
                     
-                    val columnWidth = 12.dp.toPx()
-                    val stepX = w / (shortMonths.size + 1)
-                    val maxBarVal = 65.0f
-                    val linePoints = mutableListOf<Offset>()
+                    val budgetY = h - paddingBottom - ((budgetLimit.toFloat() / maxVal) * plotHeight)
+                    drawLine(
+                        color = AlertCoral.copy(alpha = 0.8f),
+                        start = Offset(0f, budgetY),
+                        end = Offset(w, budgetY),
+                        strokeWidth = 1.5.dp.toPx(),
+                        pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+                    )
                     
+                    val spentPoints = mutableListOf<Offset>()
                     for (i in shortMonths.indices) {
                         val x = stepX * (i + 1)
-                        val barVal = barData[i]
-                        val barHeight = (barVal / maxBarVal) * (h - 40f)
-                        val barTopY = h - 20f - barHeight
-                        
-                        drawRoundRect(
-                            color = TealPrimary,
-                            topLeft = Offset(x - columnWidth / 2, barTopY),
-                            size = Size(columnWidth, barHeight),
-                            cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
-                        )
-                        
-                        val trendY = h - 20f
-                        linePoints.add(Offset(x, trendY))
+                        val spentVal = chartData[i].toFloat()
+                        val y = h - paddingBottom - ((spentVal / maxVal) * plotHeight)
+                        spentPoints.add(Offset(x, y))
                     }
                     
-                    for (i in 0 until linePoints.size - 1) {
+                    for (i in 0 until spentPoints.size - 1) {
                         drawLine(
-                            color = MintAccent,
-                            start = linePoints[i],
-                            end = linePoints[i + 1],
-                            strokeWidth = 3.dp.toPx()
+                            color = TealPrimary,
+                            start = spentPoints[i],
+                            end = spentPoints[i + 1],
+                            strokeWidth = 3.5.dp.toPx(),
+                            cap = StrokeCap.Round
                         )
                     }
                     
-                    linePoints.forEach { pt ->
+                    for (i in spentPoints.indices) {
+                        val pt = spentPoints[i]
+                        val isHighlighted = selectedPointIndex == i
+                        
+                        if (isHighlighted) {
+                            drawCircle(
+                                color = TealPrimary.copy(alpha = 0.3f),
+                                radius = 12.dp.toPx(),
+                                center = pt
+                            )
+                        }
+                        
                         drawCircle(
-                            color = MintAccent,
+                            color = TealPrimary,
                             radius = 6.dp.toPx(),
                             center = pt
                         )
                         drawCircle(
                             color = SlateCard,
-                            radius = 2.dp.toPx(),
+                            radius = 2.5.dp.toPx(),
                             center = pt
                         )
                     }
                 }
             }
             
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceAround
             ) {
-                shortMonths.forEach { m ->
+                shortMonths.forEachIndexed { i, month ->
+                    val isSelected = selectedPointIndex == i
                     Text(
-                        text = m,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = SoftGray
+                        text = month,
+                        fontSize = 11.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isSelected) TealPrimary else SoftGray,
+                        modifier = Modifier.clickable {
+                            selectedPointIndex = if (selectedPointIndex == i) null else i
+                        }
                     )
                 }
+            }
+            
+            selectedPointIndex?.let { index ->
+                val spent = chartData[index]
+                val variance = spent - budgetLimit
+                val isOverSpent = variance > 0
+                
+                Spacer(modifier = Modifier.height(14.dp))
+                
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SlateDark),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, TealPrimary.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Analysis: ${shortMonths[index]} 2026",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                color = OffWhite
+                            )
+                            Text(
+                                text = if (isOverSpent) "Over Budget" else "Under Budget",
+                                fontWeight = FontWeight.Black,
+                                fontSize = 10.sp,
+                                color = if (isOverSpent) AlertCoral else TealPrimary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text("ACTUAL SPENT", fontSize = 8.sp, color = SoftGray, fontWeight = FontWeight.Bold)
+                                Text("₹${DecimalFormat("#,##,###").format(spent)}", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = OffWhite)
+                            }
+                            Column {
+                                Text("BUDGET GOAL", fontSize = 8.sp, color = SoftGray, fontWeight = FontWeight.Bold)
+                                Text("₹${DecimalFormat("#,##,###").format(budgetLimit)}", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = SoftGray)
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("VARIANCE", fontSize = 8.sp, color = SoftGray, fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = "${if (isOverSpent) "+" else ""}₹${DecimalFormat("#,##,###").format(variance)}",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = if (isOverSpent) AlertCoral else TealPrimary
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun InteractiveSavingsCalculatorCard(
+    viewModel: FinanceViewModel,
+    modifier: Modifier = Modifier
+) {
+    var targetAmountStr by remember { mutableStateOf("100000") }
+    var monthsSliderValue by remember { mutableStateOf(12f) }
+    var calculatorGoalLabel by remember { mutableStateOf("Dream Trip") }
+    
+    val targetAmount = targetAmountStr.toDoubleOrNull() ?: 0.0
+    val months = monthsSliderValue.toInt()
+    val recommendedMonthlySaving = if (months > 0) targetAmount / months else 0.0
+    
+    val systemBudget = 45000.0
+    val budgetPct = if (recommendedMonthlySaving > 0) (recommendedMonthlySaving / systemBudget) * 100.0 else 0.0
+    val context = LocalContext.current
+    
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = SlateCard),
+        modifier = modifier
+            .fillMaxWidth()
+            .border(1.2.dp, BorderSlate, RoundedCornerShape(20.dp))
+            .testTag("savings_calculator_card")
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text("🧮", fontSize = 18.sp)
+                Text("SAVINGS GOAL CALCULATOR", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = SoftGray)
+            }
+            
+            HorizontalDivider(color = BorderSlate)
+            
+            OutlinedTextField(
+                value = targetAmountStr,
+                onValueChange = { targetAmountStr = it },
+                label = { Text("Desired Target Amount (₹)", fontSize = 11.sp, color = OffWhite) },
+                leadingIcon = { Text("₹", color = SoftGray, fontWeight = FontWeight.Bold) },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = TealPrimary, unfocusedBorderColor = BorderSlate)
+            )
+            
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Target Duration", fontSize = 11.sp, color = SoftGray, fontWeight = FontWeight.SemiBold)
+                    Text("$months month${if (months > 1) "s" else ""}", fontSize = 12.sp, color = TealPrimary, fontWeight = FontWeight.ExtraBold)
+                }
+                Slider(
+                    value = monthsSliderValue,
+                    onValueChange = { monthsSliderValue = it },
+                    valueRange = 1f..60f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = TealPrimary,
+                        activeTrackColor = TealPrimary,
+                        inactiveTrackColor = BorderSlate
+                    )
+                )
+            }
+            
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(TealPrimary.copy(alpha = 0.05f))
+                    .border(1.2.dp, TealPrimary.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                    .padding(14.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("RECOMMENDED MONTHLY SAVINGS", fontSize = 9.sp, color = SoftGray, fontWeight = FontWeight.Bold)
+                    Text("₹${DecimalFormat("#,##,###").format(recommendedMonthlySaving)} / mo", fontSize = 22.sp, fontWeight = FontWeight.Black, color = TealPrimary)
+                    Text(
+                        text = "To reach ₹${DecimalFormat("#,##,###").format(targetAmount)} in $months months, save ₹${DecimalFormat("#,##,###").format(recommendedMonthlySaving)} monthly. This represents about ${String.format(Locale.ROOT, "%.1f", budgetPct)}% of your dynamic family budget (₹45k).",
+                        fontSize = 11.sp,
+                        color = SoftGray,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 15.sp,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
+            
+            OutlinedTextField(
+                value = calculatorGoalLabel,
+                onValueChange = { calculatorGoalLabel = it },
+                label = { Text("Quick Goal Label", fontSize = 11.sp, color = OffWhite) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = TealPrimary, unfocusedBorderColor = BorderSlate)
+            )
+            
+            Button(
+                onClick = {
+                    if (targetAmount > 0) {
+                        val cal = Calendar.getInstance()
+                        cal.add(Calendar.MONTH, months)
+                        val monthsList = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+                        val dateStr = "${monthsList[cal.get(Calendar.MONTH)]} ${cal.get(Calendar.YEAR)}"
+                        
+                        viewModel.addSavingsGoal(
+                            name = "🧮 Calculator | $calculatorGoalLabel",
+                            target = targetAmount,
+                            current = 0.0,
+                            date = dateStr,
+                            automated = false
+                        )
+                        android.widget.Toast.makeText(context, "🎯 Savings goal synchronized from calculator!", android.widget.Toast.LENGTH_SHORT).show()
+                    } else {
+                        android.widget.Toast.makeText(context, "Please specify a valid savings target amount", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Establish Goal from Calculation", color = Color.White, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -2051,7 +2538,8 @@ fun DashboardScreen(
     viewModel: FinanceViewModel,
     yearFilter: Int,
     monthFilter: Int,
-    onNavigateToAdd: () -> Unit
+    onNavigateToAdd: () -> Unit,
+    onViewAllTips: () -> Unit
 ) {
     val transactions by viewModel.transactions.collectAsStateWithLifecycle()
     val savingsGoals by viewModel.savingsGoals.collectAsStateWithLifecycle()
@@ -2133,6 +2621,7 @@ fun DashboardScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .border(1.2.dp, BorderSlate, RoundedCornerShape(18.dp))
+                    .fadeInSlideIn(delayMillis = 50)
                     .testTag("core_balances_card")
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
@@ -2309,7 +2798,109 @@ fun DashboardScreen(
         }
 
         item {
-            DashboardStockPortfolioComponent(viewModel = viewModel)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Column 1: BUDGET TRACKER (Weight 1f)
+                Card(
+                    modifier = Modifier
+                        .weight(1f)
+                        .border(1.2.dp, BorderSlate, RoundedCornerShape(16.dp))
+                        .fadeInSlideIn(delayMillis = 150)
+                        .testTag("dashboard_budget_tracker_grid_card"),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text("📊", fontSize = 16.sp)
+                            Text("BUDGET TRACKER", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = SoftGray)
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        
+                        // Render mini category budgets list
+                        val activeCategories = listOf("Grocery", "Shopping", "Food", "Bills", "Medical")
+                        activeCategories.take(4).forEach { cat ->
+                            val allocated = budgetsMap[cat] ?: 5000.0
+                            val totalSpent = filteredTxs.filter { it.type == "Expense" && it.category.equals(cat, ignoreCase = true) }.sumOf { it.amount }
+                            val pct = if (allocated > 0) (totalSpent / allocated).coerceIn(0.0, 1.0) else 0.0
+                            
+                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text(cat, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = OffWhite)
+                                    Text("${(pct * 100).toInt()}%", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (pct >= 0.9) AlertCoral else TealPrimary)
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                LinearProgressIndicator(
+                                    progress = pct.toFloat(),
+                                    color = if (pct >= 0.9) AlertCoral else TealPrimary,
+                                    trackColor = BorderSlate.copy(alpha = 0.2f),
+                                    modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape)
+                                )
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Manage Budgets ➜",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TealPrimary,
+                            modifier = Modifier.clickable { activeSubTab = 1 }
+                        )
+                    }
+                }
+
+                // Column 2: SAVINGS TIPS (Weight 1f)
+                Card(
+                    modifier = Modifier
+                        .weight(1f)
+                        .border(1.2.dp, BorderSlate, RoundedCornerShape(16.dp))
+                        .fadeInSlideIn(delayMillis = 250)
+                        .testTag("dashboard_savings_tips_grid_card"),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text("💡", fontSize = 16.sp)
+                            Text("SAVINGS TIPS", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = SoftGray)
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Column {
+                                Text("💡 50-30-20 Rule", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TealPrimary)
+                                Text("Limit groceries to 30% of standard liquid funds.", fontSize = 9.sp, color = SoftGray, lineHeight = 12.sp)
+                            }
+                            Column {
+                                Text("💡 Sweep-In cash", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MintAccent)
+                                Text("Relocate 15% of stagnant bank balance.", fontSize = 9.sp, color = SoftGray, lineHeight = 12.sp)
+                            }
+                            Column {
+                                Text("💡 Micro Savings", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = ElectricBlue)
+                                Text("Passive auto-save rounding-ups generated ₹1.4K.", fontSize = 9.sp, color = SoftGray, lineHeight = 12.sp)
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "View All Tips ➜",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TealPrimary,
+                            modifier = Modifier.clickable { onViewAllTips() }
+                        )
+                    }
+                }
+            }
         }
 
         item {
@@ -2319,6 +2910,7 @@ fun DashboardScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .border(1.2.dp, BorderSlate, RoundedCornerShape(20.dp))
+                    .fadeInSlideIn(delayMillis = 350)
                     .testTag("circular_spent_gauge_card")
             ) {
                 Column(
@@ -2675,7 +3267,7 @@ fun DashboardScreen(
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "NAME FN needs certain permissions to give you better experience.",
+                            text = "FineNest needs certain permissions to give you better experience.",
                             fontSize = 11.sp,
                             color = OffWhite,
                             fontWeight = FontWeight.Medium
@@ -4572,7 +5164,7 @@ fun exportTransactionsToPdf(
         var y = 50f
         
         // Title
-        canvas.drawText("NAME FN FINANCIAL LEDGER REPORT", 40f, y, titlePaint)
+        canvas.drawText("FINENEST FINANCIAL LEDGER REPORT", 40f, y, titlePaint)
         y += 20f
         
         val sdfDate = SimpleDateFormat("dd MMM yyyy", Locale.US)
@@ -4689,8 +5281,8 @@ fun sharePdfFile(context: android.content.Context, file: java.io.File) {
         val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
             type = "application/pdf"
             putExtra(android.content.Intent.EXTRA_STREAM, uri)
-            putExtra(android.content.Intent.EXTRA_SUBJECT, "NAME FN Financial Ledger Statement")
-            putExtra(android.content.Intent.EXTRA_TEXT, "Attached is the requested NAME FN financial statement PDF.")
+            putExtra(android.content.Intent.EXTRA_SUBJECT, "FineNest Financial Ledger Statement")
+            putExtra(android.content.Intent.EXTRA_TEXT, "Attached is the requested FineNest financial statement PDF.")
             addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(android.content.Intent.createChooser(intent, "Share Statement PDF"))
@@ -5649,7 +6241,7 @@ fun WealthScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("💎 NAME FN PORTFOLIO SYSTEM", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TealPrimary)
+        Text("💎 FINENEST PORTFOLIO SYSTEM", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TealPrimary)
         
         // Horizontal Scroll bar to select asset/debt modules
         val modulesList = listOf("🛡️ Emergency", "🎯 Goals", "📈 Stocks", "🏦 Loans/Debt", "💳 Credit Cards", "👥 People Tracker", "📜 Insurance")
@@ -5819,6 +6411,11 @@ fun FamilyGoalsSubView(viewModel: FinanceViewModel) {
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        // Interactive Savings Calculator Card
+        item {
+            InteractiveSavingsCalculatorCard(viewModel = viewModel)
+        }
+
         // Enter custom Savings Goals details form
         item {
             Card(
@@ -8465,19 +9062,6 @@ fun SecureAuthScreen(viewModel: FinanceViewModel) {
                             containerColor = SlateCard,
                             modifier = Modifier.border(0.5.dp, BorderSlate, RoundedCornerShape(20.dp))
                         )
-                    }
-
-                    // Offline Bypass Option
-                    OutlinedButton(
-                        onClick = { viewModel.bypassAuth() },
-                        border = BorderStroke(0.5.dp, BorderSlate),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = OffWhite),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(42.dp)
-                    ) {
-                        Text("Instant Private Offline Inspection (Guest Mode)", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                     }
 
                     HorizontalDivider(color = BorderSlate, thickness = 0.5.dp)
@@ -11715,7 +12299,7 @@ fun BrokerBankConnectionsSubView(viewModel: FinanceViewModel) {
                         HorizontalDivider(color = BorderSlate)
 
                         if (!isGrowwConnected) {
-                            Text("Link your Groww Account to automatically import your actual stocks, mutual funds, and cash balances into NAME FN without manual ledger logging.", fontSize = 11.sp, color = SoftGray, lineHeight = 15.sp)
+                            Text("Link your Groww Account to automatically import your actual stocks, mutual funds, and cash balances into FineNest without manual ledger logging.", fontSize = 11.sp, color = SoftGray, lineHeight = 15.sp)
 
                             Spacer(modifier = Modifier.height(4.dp))
 
@@ -11978,7 +12562,7 @@ fun DashboardStockPortfolioComponent(
                     Text("📈", fontSize = 16.sp)
                     Column {
                         Text(
-                            text = "NAME FN STOCK PORTFOLIO LEDGER",
+                            text = "FINENEST STOCK PORTFOLIO LEDGER",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = TealPrimary,
@@ -12200,7 +12784,7 @@ fun AiSavingsInsightsDialog(
                         Text("💡", fontSize = 20.sp)
                         Column {
                             Text(
-                                text = "NAME FN AI ADVISER",
+                                text = "FINENEST AI ADVISER",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TealPrimary,

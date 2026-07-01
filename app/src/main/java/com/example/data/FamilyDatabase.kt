@@ -15,9 +15,11 @@ import androidx.room.RoomDatabase
         LoanEntity::class,
         InsuranceEntity::class,
         StockEntity::class,
-        CreditCardEntity::class
+        CreditCardEntity::class,
+        RecurringExpenseEntity::class,
+        GovtSchemeEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class FamilyDatabase : RoomDatabase() {

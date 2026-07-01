@@ -135,4 +135,30 @@ interface FamilyFinanceDao {
 
     @Query("DELETE FROM credit_cards WHERE id = :id")
     suspend fun deleteCreditCard(id: Int)
+
+    // --- Recurring Expenses ---
+    @Query("SELECT * FROM recurring_expenses")
+    fun getAllRecurringExpenses(): Flow<List<RecurringExpenseEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRecurringExpense(recurring: RecurringExpenseEntity)
+
+    @Query("DELETE FROM recurring_expenses WHERE id = :id")
+    suspend fun deleteRecurringExpense(id: Int)
+
+    @Query("DELETE FROM recurring_expenses")
+    suspend fun clearRecurringExpenses()
+
+    // --- Govt Schemes ---
+    @Query("SELECT * FROM govt_schemes")
+    fun getAllGovtSchemes(): Flow<List<GovtSchemeEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertGovtScheme(scheme: GovtSchemeEntity)
+
+    @Query("DELETE FROM govt_schemes WHERE id = :id")
+    suspend fun deleteGovtScheme(id: Int)
+
+    @Query("DELETE FROM govt_schemes")
+    suspend fun clearGovtSchemes()
 }

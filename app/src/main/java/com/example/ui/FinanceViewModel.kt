@@ -1707,7 +1707,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             .putBoolean("conn_groww_connected", false)
             .putString("conn_groww_method", "API")
             .apply()
-        showNotification("Groww account disconnected from NAME FN.")
+        showNotification("Groww account disconnected from FineNest.")
     }
 
     suspend fun fetchLiveStockPrice(symbol: String): Double? {

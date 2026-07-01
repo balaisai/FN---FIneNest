@@ -96,3 +96,29 @@ data class CreditCardEntity(
     val status: String // "Paid", "Due"
 )
 
+@Entity(tableName = "recurring_expenses")
+data class RecurringExpenseEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val name: String,
+    val amount: Double,
+    val category: String,
+    val billingDate: Int, // Day of month (1-31)
+    val notes: String = "",
+    val isAutoDeduct: Boolean = true,
+    val lastAppliedMonth: Int = -1, // 0-11
+    val lastAppliedYear: Int = -1
+)
+
+@Entity(tableName = "govt_schemes")
+data class GovtSchemeEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val schemeName: String, // e.g. "Sukanya Samriddhi Yojana (SSY)", "Public Provident Fund (PPF)", "National Pension Scheme (NPS)"
+    val accountHolder: String,
+    val investedAmount: Double,
+    val currentBalance: Double,
+    val interestRate: Double, // e.g. 8.2 (percentage)
+    val openingDate: String,
+    val maturityDate: String,
+    val lastUpdated: Long
+)
+
