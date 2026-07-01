@@ -1,0 +1,8 @@
+{
+  "name": "NAME FN",
+  "description": "A professional family personal wealth manager, budget planner, and automated savings advisor.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
